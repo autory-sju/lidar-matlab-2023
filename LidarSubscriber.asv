@@ -1,9 +1,0 @@
-classdef LidarSubscriber < ros.Subscriber
-    % properties
-    % end
-    methods
-        function obj = LidarSubscriber(topic, varargin)
-            obj.Value = val;
-        end
-    end
-end
