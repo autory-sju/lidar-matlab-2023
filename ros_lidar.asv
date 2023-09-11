@@ -1,0 +1,30 @@
+clear; close all; clc; rosshutdown;
+
+rosinit("10.211.55.6");
+
+% lidarSub = rossubscriber('/ouster/points', "DataFormat", "struct");
+
+lidarSub = LidarSubscriber('/ouster/points', "DataFormat", "struct");
+params = lidarParameters('OS1Gen1-32', 1024);
+
+roi = [0, 20, -10, 10, -1, 2];
+
+run('initPlayer.m')
+
+while true
+    rawPcl = 
+
+    roiIdx = findPointsInROI(pclOrg, roi);
+    pclRoi = select(pclOrg, roiIdx);
+
+    view(roiPyr, pclRoi);
+
+    nonGroundPcl = getNonGroundPcl(pclRoi, 0.06, [0,0,1], 30);
+
+    view(grmPyr, nonGroundPcl);
+
+    denPcl = pcdenoise(nonGroundPcl);
+    view(denPyr, denPcl);
+end
+
+
