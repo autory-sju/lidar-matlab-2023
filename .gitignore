@@ -4,3 +4,8 @@
 # Records
 
 /calibration/Records
+/calibration/PointClouds
+/calibration/Images
+
+# Autosaves
+*.asv
