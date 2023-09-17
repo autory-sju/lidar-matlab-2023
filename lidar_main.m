@@ -6,11 +6,14 @@ lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
 params = lidarParameters('OS1Gen1-32', 1024);
 
 % camera subscriber ------------ !need refactor ++++++++++++++
-cameraSubscriber = rossubscriber("/yolov5/cob_detections");
+detectionSubscriber = rossubscriber("/yolov5/cob_detections");
+
+cameraSubscriber = rossubscriber("/usb_cam/image_raw");
+
 load("calibration/camera_cali_result_9.16.20.mat")
 load("calibration/lcc-2023-09-17-00.mat")
 
-roi = [0, 10,-5, 5, -1, 2];
+roi = [0, 20,-5, 5, -1, 2];
 
 initPlayer
 
@@ -22,14 +25,21 @@ rPyr = pcplayer(roi(1:2), roi(3:4), roi(5:6));
 while true
     receivedPoints = lidarSubscriber.receive(params);
     % ++++++++++++++
-    bboxData = receive(cameraSubscriber);
+    imgMsg = receive(cameraSubscriber);
+    img = readImage(imgMsg);
+    imPts = projectLidarPointsOnImage( ...
+        receivedPoints,cameraParams,tform);
+    imshow(img)
+    hold on
+    plot(imPts(:,1),imPts(:,2),'.','Color','r')
+    hold off
+
+    bboxData = receive(detectionSubscriber);
 
     roiPoints = getPointsInROI(receivedPoints, roi);
     view(roiPyr, roiPoints);
 
-    nonCeilPoints = getNonGroundPoints(roiPoints, 0.06, [0,0,1], 30);
-
-    nonGroundPoints = getNonGroundPoints(nonCeilPoints, 0.06, [0,0,1], 30);
+    nonGroundPoints = getNonGroundPoints(roiPoints, 0.06, [0,0,1], 30);
     % view(grmPyr, nonGroundPoints);
 
     denoisedPoints = pcdenoise(nonGroundPoints);
