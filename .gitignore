@@ -9,3 +9,6 @@
 
 # Autosaves
 *.asv
+
+# Data
+*.mat
