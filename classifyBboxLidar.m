@@ -1,5 +1,5 @@
 function [yBboxes, bBboxes, rBboxes] = classifyBboxLidar(bboxesLidar, label, boxesUsed)
-    bboxesCnt = numel(label);
+    bboxesCnt = numel(boxesUsed);
 
     yTmp = zeros(bboxesCnt, 9);
     bTmp = zeros(bboxesCnt, 9);
@@ -12,7 +12,7 @@ function [yBboxes, bBboxes, rBboxes] = classifyBboxLidar(bboxesLidar, label, box
     for i = 1:bboxesCnt
         if boxesUsed(i)
             bbCnt = bbCnt + 1;
-            switch label(i)
+            switch label(i,:)
                 case 'y_cone'
                     yCnt = yCnt + 1;
                     yTmp(yCnt, :) = bboxesLidar(bbCnt, :);
