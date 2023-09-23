@@ -22,7 +22,6 @@ while true
 
     frame1 = readImage(cameraData1);
     frame2 = readImage(cameraData2);
-    % montage({frame1, frame2})
 
     fusedPt1 = fuseCameraToLidar(frame1, receivedPoints, cameraParams1, invert(tform1));
     fusedPt2 = fuseCameraToLidar(frame2, receivedPoints, cameraParams2, invert(tform2));

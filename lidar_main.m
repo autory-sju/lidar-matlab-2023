@@ -3,16 +3,14 @@ clear; close all; clc; rosshutdown;
 rosinit();
 
 lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
+params = lidarParameters('OS1Gen1-32', 1024);
+
 l_detectionSubscriber = rossubscriber("/yolov5/cob_detections"); % need topic
 r_detectionSubscriber = rossubscriber("/yolov5/cob_detections"); % need topic
 
-load("calibration/camera_calibration_left.mat")
-load("calibration/camera_calibration_right.mat")
-load("calibration/lidar_camera_calibration_left.mat")
-load("calibration/lidar_camera_calibration_right.mat")
+load("cameraParams.mat"); load("tform.mat");
 
-params = lidarParameters('OS1Gen1-32', 1024);
-roi = [0, 10,-5, 5, -1, 2];
+roi = [0, 20, -10, 10, -1, 2];
 
 conPyr = pcplayer(roi(1:2), roi(3:4), roi(5:6));
 
