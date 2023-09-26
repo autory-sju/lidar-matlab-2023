@@ -1,6 +1,6 @@
 clear; close all; clc; rosshutdown;
 
-rosinit("10.211.55.6");
+rosinit();
 
 lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
 params = lidarParameters('OS1Gen1-32', 1024);
@@ -10,9 +10,9 @@ cameraSubscriber2 = rossubscriber("/camera2/usb_cam2/image_raw");
 
 load("cameraParams.mat"); load("tform.mat");
 
-lidarPlayer1 = pcplayer([-10,10], [-10,10], [-1,2]);
-lidarPlayer2 = pcplayer([-10,10], [-10,10], [-1,2]);
-mergePlayer = pcplayer([-10,10], [-10,10], [-1,2]);
+lidarPlayer1 = pcplayer([0,20], [-10,10], [-1,2]);
+lidarPlayer2 = pcplayer([0,20], [-10,10], [-1,2]);
+mergePlayer = pcplayer([0,20], [-10,10], [-1,2]);
 
 while true
     receivedPoints = lidarSubscriber.receive(params);
