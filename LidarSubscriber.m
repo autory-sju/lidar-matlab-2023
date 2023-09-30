@@ -21,11 +21,10 @@ classdef LidarSubscriber
         %receive
         %   Return pointcloud from LiDAR
         %   Receive and organize points
-        function receivedPcl = receive(obj, params)
+        function receivedPcl = receive(obj)
            lidarData = receive(obj.Value);
            xyzData = rosReadXYZ(lidarData);
-           rawPcl = pointCloud(xyzData);
-           receivedPcl = pcorganize(rawPcl,params);
+           receivedPcl = pointCloud(xyzData);
         end
     end
 end

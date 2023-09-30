@@ -16,7 +16,7 @@ while true
 
     roiPoints = getPointsInROI(receivedPoints, roi);
 
-    nonGroundPoints = getNonGroundSMRF(roiPoints);
+    nonGroundPoints = getNonGroundFromLidarData(roiPoints, params);
 
     view(roiPyr, receivedPoints);
     view(proPyr, nonGroundPoints);
