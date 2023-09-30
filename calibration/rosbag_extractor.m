@@ -1,8 +1,9 @@
 clear; close all; clc;
 
-bag=rosbag('2023-09-16-18-26-19.bag');
+bag=rosbag('Records/');
 
-imageBag=select(bag,'Topic','/usb_cam/image_raw');
+% imageBag=select(bag,'Topic','/camera1/usb_cam1/image_raw');
+imageBag=select(bag,'Topic','/camera2/usb_cam2/image_raw');
 pcBag=select(bag, 'Topic','/ouster/points');
 
 imageMsgs=readMessages(imageBag);
