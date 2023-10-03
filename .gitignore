@@ -3,9 +3,9 @@
 
 # Records
 
-/calibration/Records
-/calibration/PointClouds
-/calibration/Images
+/util/calibration/Records
+/util/calibration/PointClouds
+/util/calibration/Images
 
 # Autosaves
 *.asv

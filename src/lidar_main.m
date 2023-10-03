@@ -8,7 +8,7 @@ lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
 detectionSubscriber1 = rossubscriber("/yolov5/cob_detections_1");
 detectionSubscriber2 = rossubscriber("/yolov5/cob_detections_2");
 
-load("./param/cameraParams.mat"); load("./param/tform.mat");
+load("./src/param/cameraParams.mat"); load("./src/param/tform.mat");
 
 roi = [0, 20, -10, 10, -1, 2];
 
