@@ -2,13 +2,17 @@
 .DS_Store
 
 # Records
-
 /util/calibration/Records
 /util/calibration/PointClouds
 /util/calibration/Images
+
+Rosbag*
 
 # Autosaves
 *.asv
 
 # Data
 *.mat
+
+# Params
+!/src/param/*
