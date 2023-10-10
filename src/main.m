@@ -183,14 +183,25 @@ function vehiclePose = updateVehiclePose(currentPosUtm, imu)
 % Originally Imu gave values in degree but PP needs values in radian.
 
 raw_yaw = imu.Orientation.X;
-if raw_yaw>=90
-    yawD = raw_yaw-90;
-elseif raw_yaw>=0
-    yawD= raw_yaw - 90;
-elseif raw_yaw>=-90
-    yawD=  -90+raw_yaw;
+% if raw_yaw>=90
+%     yawD = raw_yaw-90;
+% elseif raw_yaw>=0
+%     yawD= raw_yaw - 90;
+% elseif raw_yaw>=-90
+%     yawD=  -90+raw_yaw;
+% else
+%     yawD= 270+raw_yaw;
+% end
+% yawRad = yawD * pi / 180;
+
+if raw_yaw >= 90
+    yawD = (180 - raw_yaw) + 90;
+elseif raw_yaw >= 0
+    yawD = -90 - (raw_yaw);
+elseif raw_yaw >= -90
+    yawD = -raw_yaw - 90;
 else
-    yawD= 270+raw_yaw;
+    yawD = -(raw_yaw + 90);
 end
 yawRad = yawD * pi / 180;
 
