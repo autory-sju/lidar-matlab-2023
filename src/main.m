@@ -7,12 +7,12 @@ rosinit("http://OMEN:11311/");
 lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
 % params = lidarParameters('OS1Gen1-32', 1024);
 
-detectionSubscriber1 = rossubscriber("/yolov5/cob_detections_1");
-detectionSubscriber2 = rossubscriber("/yolov5/cob_detections_2");
+detectionSubscriber1 = rossubscriber("/yolov5/cob_detections_2");
+detectionSubscriber2 = rossubscriber("/yolov5/cob_detections_1");
 
 load("./src/param/cameraParams.mat"); load("./src/param/tform.mat");
 
-roi = [0, 20, -10, 10, -1, 2];
+roi = [0, 20, -10, 10, -1, 1.5];
 
 coneW = 400 * 0.001;
 coneH = 700 * 0.001;
@@ -27,8 +27,8 @@ conPyr = pcplayer(roi(1:2), roi(3:4), roi(5:6));
 
 %% JUDGEMENT
 pp=controllerPurePursuit;
-pp.LookaheadDistance=5; % m
-pp.DesiredLinearVelocity=1; % m/s
+pp.LookaheadDistance=3; % m
+pp.DesiredLinearVelocity=3; % m/s
 pp.MaxAngularVelocity = 2.0; % rad/s
 waypointTreshold = 2;
 % yaw = [0;0];
@@ -53,7 +53,7 @@ while true
     [labels,numClusters] = pcsegdist(nonGroundPoints,0.3);
 
     mergedPoints = pointCloud([0,0,0]);
-
+    % mergedPoints = nonGroundPoints;
     for i = 1:numClusters
         clusterIndices = find(labels == i);
         clusterCloud = select(nonGroundPoints, clusterIndices);
@@ -93,9 +93,9 @@ while true
         Opacity=0.5)
     drawnow
 
-    yPos = yBboxes(:, 1:2);
-    rPos = rBboxes(:, 1:2);
-    bPos = bBboxes(:, 1:2);
+    yPos = yBboxes(:, 1:2)+[+1.8,0]
+    rPos = rBboxes(:, 1:2)+[+1.8,0];
+    bPos = bBboxes(:, 1:2)+[+1.8,0]
 
     %% JUDGEMENT - LOOP
     redCones = rPos;
@@ -123,14 +123,22 @@ while true
             % For watching Cone perception
             hold off;
             scatter(innerConePosition(:,1),innerConePosition(:,2),'blue');
+            xlim(roi(1:2));
+            ylim(roi(3:4));
             hold on;
-            scatter(outerConePosition(:,1),outerConePosition(:,2),'red');
+            scatter(outerConePosition(:,1),outerConePosition(:,2),'green');
+            
+            if size(rPos)>0
+                scatter(rPos(:,1),rPos(:,2),'red');
+            end
 
             % MATCHING BOTH SIDE CONE LENGTH
-            [innerConePosition, outerConePosition] = match_array_lengths(innerConePosition, outerConePosition);
+            %[innerConePosition, outerConePosition] = match_array_lengths(innerConePosition, outerConePosition);
             waypoints = generate_waypoints_del(innerConePosition, outerConePosition);
-
+            plot(waypoints(:,1), waypoints(:,2));
+            
             worldWaypoints = transformWaypointsToOdom(waypoints, vehiclePose);
+            
 
             pp.Waypoints = worldWaypoints;
         catch
@@ -139,7 +147,7 @@ while true
         end
     end
 
-    [v, w] = pp(vehiclePose) % Pass the current vehicle pose to the path planner
+    [v, w] = pp(vehiclePose); % Pass the current vehicle pose to the path planner
 
     if abs(prevw)>abs(w)
         w = -w;
@@ -198,6 +206,7 @@ if size(redCones,1) ~= 0
     % for every red cones detecte
     for i=1:1:size(redCones,1)
         % distance between one of red cone is under 5meter
+        redCones(i,1)
         if redCones(i,1)<5
             redConeCnt = redConeCnt+1;
         end
@@ -253,10 +262,53 @@ end
 
 
 function waypoints = generate_waypoints_del(innerConePosition, outerConePosition)
-[m,nc] = size(innerConePosition); % size of the inner/outer cone positions data
-kockle_coords = zeros(m * 2,nc); % initiate a P matrix consisting of inner and outer coordinates
-kockle_coords(1:2:2*m,:) = innerConePosition;
-kockle_coords(2:2:2*m,:) = outerConePosition; % merge the inner and outer coordinates with alternate values
+[innerM,~] = size(innerConePosition);
+[outerM,~] = size(outerConePosition);
+if innerM==1 | outerM==1
+    waypoints = innerConePosition(1,:);
+    waypoints = (waypoints + outerConePosition(1,:))/2;
+else
+    
+ if innerM>outerM 
+     kockle_coords = zeros(innerM * 2,2); % initiate a P matrix consisting of inner and outer coordinates
+     kockle_coords(1:2:2*innerM,:) = innerConePosition;
+     % kockle_coords(2:2:2*outerM,:) = outerConePosition; 
+     % for i=2*outerM+2:2:2*innerM
+     %     kockle_coords(i,:) = outerConePosition(outerM,:);
+     % end
+     for i = 1 : 1 :innerM 
+         kockle_coords(i*2,:) = outerConePosition(1,:)*(innerM-i)/(innerM-1) +outerConePosition(outerM,:)*(i-1)/(innerM-1); 
+
+     end
+ 
+ elseif innerM<outerM 
+     kockle_coords = zeros(outerM * 2,2); % initiate a P matrix consisting of inner and outer coordinates
+     % kockle_coords(1:2:2*innerM,:) = innerConePosition;
+     kockle_coords(2:2:2*outerM,:) = outerConePosition; 
+     % for i=2*innerM+1:2:2*outerM
+     %     kockle_coords(i,:) = innerConePosition(innerM,:);
+     % end
+     for i = 1 : 1 :outerM 
+         kockle_coords(i*2-1,:) = innerConePosition(1,:)*(outerM-i)/(outerM-1) +innerConePosition(innerM,:)*(i-1)/(outerM-1); 
+
+     end
+ 
+ 
+ else
+    kockle_coords = zeros(innerM * 2,2); % initiate a P matrix consisting of inner and outer coordinates
+    kockle_coords(1:2:2*innerM,:) = innerConePosition;
+    kockle_coords(2:2:2*innerM,:) = outerConePosition; 
+ end
+
+
+%%%%%%%%%%%%%%%%%%
+%[m,nc] = size(innerConePosition); % size of the inner/outer cone positions data
+%kockle_coords = zeros(m * 2,nc); % initiate a P matrix consisting of inner and outer coordinates
+%kockle_coords(1:2:2*m,:) = innerConePosition;
+%kockle_coords(2:2:2*m,:) = outerConePosition; % merge the inner and outer coordinates with alternate values
+
+
+
 xp = []; % create an empty numeric xp vector to store the planned x coordinates after each iteration
 yp = [];
 
@@ -299,7 +351,7 @@ xmp=((xPo((Eodd(:,1))) + xPo((Eodd(:,2))))/2);
 ymp=((yPo((Eodd(:,1))) + yPo((Eodd(:,2))))/2);
 Pmp=[xmp ymp];
 waypoints = Pmp;
-
+end
 end
 
 function [pub, msg] = publish_twist_command(v, w, curVelo, topicName)
