@@ -4,159 +4,80 @@ clear; close all; clc; rosshutdown;
 rosinit("http://OMEN:11311/");
 
 %% PERCEPTION
-lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
-% params = lidarParameters('OS1Gen1-32', 1024);
-
-detectionSubscriber1 = rossubscriber("/yolov5/cob_detections_1");
-detectionSubscriber2 = rossubscriber("/yolov5/cob_detections_2");
-
-% load("./src/param/cameraParams.mat"); load("./src/param/tform.mat");
-load("./src/param/cam1_t.mat"); load("./src/param/cam2_t.mat");
-
-wayPointStore=[0,0];
-roi = [0, 20, -15, 15, -1, 1.5];
-% roi = [0, 6, -7, 7, -1, 1.5];
-
-coneW = 400 * 0.001;
-coneH = 700 * 0.001;
-resoultionHorizontal = 45 / (32-1);
-resoultionVertical = 360 / 1024;
-
-filter = @(x, y) coneW*coneH / (8 * norm([x, y])^2 * tand(resoultionVertical/2) * tand(resoultionHorizontal/2));
-
-
-conPyr = pcplayer(roi(1:2), roi(3:4), roi(5:6));
-
+wDelay=0;
 
 %% JUDGEMENT
 pp=controllerPurePursuit;
 pp.LookaheadDistance=4; % m
-pp.DesiredLinearVelocity=2; % m/s
+pp.DesiredLinearVelocity=0.3; % m/s
 pp.MaxAngularVelocity = 5.0; % rad/s
 waypointTreshold = 2;
 % yaw = [0;0];
+vehiclePose=[0,0,0];
 gpsSub = rossubscriber('/utm');
 utmSpeedSub = rossubscriber('/ublox_gps/fix_velocity');
 %imuSub = rossubscriber('/imu');
 prevw = 0;
 waypoints = [];
+worldWaypoints = [
+302480.696083935	4123671.63414136
+302480.967446105	4123671.47232571
+302481.300386817	4123671.28685679
+302481.817802059	4123671.01933197
+302482.194839370	4123670.82172332
+302482.606579561	4123670.58999160
+302483.045456538	4123670.37982574
+302483.440236967	4123670.18179966
+302483.896334875	4123669.94902429
+302484.352432809	4123669.71624894
+302484.771478138	4123669.41773238
+302485.134161307	4123668.98731587
+302485.467096921	4123668.42437318
+302485.727232741	4123667.78542818
+302485.847773798	4123667.24968737
+302485.895515024	4123666.63794425
+302485.854279827	4123666.01719250
+302485.748855219	4123665.30913365
+302485.753283106	4123664.74281838
+302485.755622340	4123664.08773482
+302485.755089679	4123663.31059487
+302485.759517580	4123662.74427960
+302485.957030696	4123662.08460374
+302486.514621860	4123661.26102505
+302487.142146322	4123660.76886627
+302487.809595363	4123660.46450518
+302488.498703705	4123660.32616720
+302489.280443631	4123660.35218243
+302490.282671729	4123660.69497308
+302490.968918262	4123661.18952677
+302491.600374010	4123661.99623064
+302491.921064724	4123662.79914421
+302492.001440650	4123663.57440552
+302491.870988276	4123664.44344474
+302491.534140946	4123665.21742056
+302490.939235940	4123665.96416161
+302490.451306559	4123666.35311602
+302489.811255755	4123666.69013881
+302489.231478196	4123666.94802824
+302488.425218049	4123667.38888147
+302487.619480144	4123667.85192685
+302487.050140742	4123668.17618391
+302486.463319398	4123668.51195453];
+fig = figure();
+pp.Waypoints = worldWaypoints;
+
 posUtmData = receive(gpsSub);
-    veloUtmData = receive(utmSpeedSub);
-    velo = updateVehicleVelo(veloUtmData);
+veloUtmData = receive(utmSpeedSub);
+velo = updateVehicleVelo(veloUtmData);
+
 vehiclePose = [posUtmData.Pose.Position.X,posUtmData.Pose.Position.Y, 0];
 startPoint = [posUtmData.Pose.Position.X,posUtmData.Pose.Position.Y, 0];
-wayPointStore=[0,0];
-
-fig = figure();
 
 %% Loop
 while true
     %% PERCEPTION - LOOP
 
-    receivedPoints = lidarSubscriber.receive();
 
-    % rotationAngles = [0 0 -0.5];
-    % translation = [0 0 0];
-    % tform = rigidtform3d(rotationAngles,translation);
-    % receivedPoints = pctransform(receivedPoints,tform);
-
-    bboxData1 = receive(detectionSubscriber1);
-    bboxData2 = receive(detectionSubscriber2);
-
-    roiPoints = getPointsInROI(receivedPoints, roi);
-    nonGroundPoints = getNonGroundSMRF(roiPoints);
-
-    [labels,numClusters] = pcsegdist(nonGroundPoints,0.3);
-
-    mergedPoints = pointCloud([0,0,0]);
-    % mergedPoints = nonGroundPoints;
-    for i = 1:numClusters
-       clusterIndices = find(labels == i);
-       clusterCloud = select(nonGroundPoints, clusterIndices);
-       clusterCenter(:) = mean(clusterCloud.Location);
-
-      expectedPointCount = filter(clusterCenter(1), clusterCenter(2));
-
-     if clusterCloud.Count > expectedPointCount * 1.4
-        continue;
-    end
-
-     reconstructedPoints = getPointsInCylinder(clusterCenter, roiPoints);
-
-    if reconstructedPoints.Count < expectedPointCount * 0.4
-       continue;
-    end
-
-    mergedPoints = pcmerge(mergedPoints, reconstructedPoints, 0.01);
-    end
-
-    bboxesCamera1 = getBboxesCamera(bboxData1);
-    bboxesCamera2 = getBboxesCamera(bboxData2);
-
-    [bboxesLidar1,~,bboxesUsed1] = bboxCameraToLidar(bboxesCamera1, mergedPoints, cameraParams1, invert(tform1), 'ClusterThreshold',0.3);
-    [bboxesLidar2,~,bboxesUsed2] = bboxCameraToLidar(bboxesCamera2, mergedPoints, cameraParams2, invert(tform2), 'ClusterThreshold',0.3);
-
-    [yBboxes, bBboxes, rBboxes] = classifyBboxLidar( ...
-        [bboxesLidar1; bboxesLidar2], ...
-        vertcat(bboxData1.Detections.Label, bboxData2.Detections.Label), ...
-        [bboxesUsed1; bboxesUsed2]);
-
-    view(conPyr, mergedPoints)
-    showShape("cuboid", ...
-        [yBboxes; bBboxes; rBboxes], ...
-        Parent=conPyr.Axes, ...
-        Color="green", ...
-        Opacity=0.5)
-    drawnow
-
-    yPos = yBboxes(:, 1:2)+[+1.8,0];
-    rPos = rBboxes(:, 1:2)+[+1.8,0];
-    bPos = bBboxes(:, 1:2)+[+1.8,0];
-
-    yPos = sortrows(yPos);
-    rPos = sortrows(rPos);
-    bPos = sortrows(bPos);
-    if(size(yPos,1)>2)
-        yCon = yPos(1,1:2);
-        for i = 2:size(yPos,1)
-            if(norm(yPos(i,:) - yCon(end,:)) > 0.4)
-                yCon(end+1,:) = yPos(i,:);
-            end
-        end
-        yPos = yCon;
-    end
-    if(size(rPos,1)>2)
-        rCon = rPos(1,1:2);
-        for i = 2:size(rPos,1)
-            if(norm(rPos(i,:) - rCon(end,:)) > 0.4)
-                rCon(end+1,:) = rPos(i,:);
-            end
-        end
-        rPos = rCon;
-    end
-    if(size(bPos,1)>2)
-        bCon = bPos(1,1:2);
-        for i = 2:size(bPos,1)
-            if(norm(bPos(i,:) - bCon(end,:)) > 0.4)
-                bCon(end+1,:) = bPos(i,:);
-            end
-        end
-        bPos = bCon;
-    end
-    
-
-
-    %% JUDGEMENT - LOOP
-    redCones = rPos;
-
-    % Emergency Stop by red cones for Brake test
-    while redConeBrake(redCones) == 1
-        while 1
-
-            [pub, msg] = publish_twist_command(-300, 0,velo, '/cmd_vel');
-            send(pub, msg);
-        end
-    end
 
     posUtmData = receive(gpsSub);
     veloUtmData = receive(utmSpeedSub);
@@ -166,68 +87,41 @@ while true
 
     vehiclePose = updateVehiclePose(posUtmData,vehiclePose,startPoint);
 
-        wayPointStore = [wayPointStore;vehiclePose(1:2)];
 
     % if isempty(pp.Waypoints) || norm(worldWaypoints(end,:)-[vehiclePose(1), vehiclePose(2)]) < waypointTreshold  % Considering only x and y for the distance
-    disp("Make new waypoints");
+    %disp("Make new waypoints");
+    xlim([worldWaypoints(1,1)-50,worldWaypoints(1,1)+50]);
+    ylim([worldWaypoints(1,2)-50,worldWaypoints(1,2)+50]);
 
-    scatter(bPos(:,1),bPos(:,2),'blue');
-    xlim(roi(1:2));
-    ylim(roi(3:4));
+
     hold on
-    scatter(rPos(:,1),rPos(:,2),'red');
-    scatter(yPos(:,1),yPos(:,2),'green');
-
-    try
-        innerConePosition = bPos;
-        outerConePosition = yPos;
-
-        % MATCHING BOTH SIDE CONE LENGTH
-        %[innerConePosition, outerConePosition] = match_array_lengths(innerConePosition, outerConePosition);
-        waypoints = generate_waypoints_del(innerConePosition, outerConePosition);
-
-        % print("make waypoints..")
-
-        worldWaypoints = transformWaypointsToOdom(waypoints, vehiclePose);
-
-
-        pp.Waypoints = worldWaypoints;
-    catch
-        disp("Fail to make new waypoints");
-        hold off
-        continue; % 다음 while문 반복으로 넘어감
-    end
-    % end
-    
-    
-    plot(waypoints(:,1), waypoints(:,2));
+    scatter(worldWaypoints(:,1),worldWaypoints(:,2),'blue');
+    scatter(vehiclePose(1), vehiclePose(2),'red');
 
 
     hold off
 
-    [v, w] = pp(vehiclePose); % Pass the current vehicle pose to the path planner
-
+    [v, w] = pp(vehiclePose) % Pass the current vehicle pose to the path planner
+    w;
     % if abs(prevw)>abs(w)
     %     w = -w;
     % end
-    prevw = w;
+    %prevw = w;
     carL = 1.33;
     % wDelay = w * carL/v;
-    
-    
-    %wDelay =0.11 * carL/0.5;
 
-
-     if velo <= 0.05 || vehiclePose(3) == 0 || abs(w)<0.01
-         wDelay = 0;
-         % Using Target Speed
-     else
-         wDelay =w * carL/velo
-     end
-    
-
+    if velo <= 0.05 || vehiclePose(3) == 0 || abs(w)<0.01
+        wDelay = 0;
+        % Using Target Speed
+    else
+        wDelay =w * carL/v*5;
+    end
+    wDelay
     [pub, msg] = publish_twist_command(v, wDelay, velo, '/cmd_vel');
     send(pub, msg);
+
+    % if abs(prevw)>abs(w)
+
 
     % 종방향 속도, 횡방향 각속도
     % tractive_control = v;
@@ -286,7 +180,7 @@ if size(redCones,1) ~= 0
         %     redConeCnt = redConeCnt+1;
         % end
     end
-    if redConeCnt>2
+    if redConeCnt>1
         isStop = 1;
     end
 end
@@ -373,7 +267,7 @@ else
         kockle_coords(1:2:2*innerM,:) = innerConePosition;
         kockle_coords(2:2:2*innerM,:) = outerConePosition;
     end
-        %scatter(kockle_coords(:,1),kockle_coords(:,2),'black');
+    scatter(kockle_coords(:,1),kockle_coords(:,2),'black');
 
 
 

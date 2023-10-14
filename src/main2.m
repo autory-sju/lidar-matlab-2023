@@ -10,12 +10,11 @@ lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
 detectionSubscriber1 = rossubscriber("/yolov5/cob_detections_1");
 detectionSubscriber2 = rossubscriber("/yolov5/cob_detections_2");
 
-% load("./src/param/cameraParams.mat"); load("./src/param/tform.mat");
-load("./src/param/cam1_t.mat"); load("./src/param/cam2_t.mat");
+load("./src/param/cam1.mat"); load("./src/param/cam2.mat");
 
-wayPointStore=[0,0];
-roi = [0, 20, -15, 15, -1, 1.5];
+roi = [0, 20, -10, 10, -1, 1.5];
 % roi = [0, 6, -7, 7, -1, 1.5];
+v=0;
 
 coneW = 400 * 0.001;
 coneH = 700 * 0.001;
@@ -25,27 +24,21 @@ resoultionVertical = 360 / 1024;
 filter = @(x, y) coneW*coneH / (8 * norm([x, y])^2 * tand(resoultionVertical/2) * tand(resoultionHorizontal/2));
 
 
-conPyr = pcplayer(roi(1:2), roi(3:4), roi(5:6));
+% conPyr = pcplayer(roi(1:2), roi(3:4), roi(5:6));
 
 
 %% JUDGEMENT
 pp=controllerPurePursuit;
-pp.LookaheadDistance=4; % m
-pp.DesiredLinearVelocity=2; % m/s
+pp.LookaheadDistance=3; % m
+pp.DesiredLinearVelocity=0.3; % m/s
 pp.MaxAngularVelocity = 5.0; % rad/s
 waypointTreshold = 2;
 % yaw = [0;0];
-gpsSub = rossubscriber('/utm');
-utmSpeedSub = rossubscriber('/ublox_gps/fix_velocity');
-%imuSub = rossubscriber('/imu');
+% gpsSub = rossubscriber('/utm');
+% utmSpeedSub = rossubscriber('/ublox_gps/fix_velocity');
+% imuSub = rossubscriber('/imu');
 prevw = 0;
 waypoints = [];
-posUtmData = receive(gpsSub);
-    veloUtmData = receive(utmSpeedSub);
-    velo = updateVehicleVelo(veloUtmData);
-vehiclePose = [posUtmData.Pose.Position.X,posUtmData.Pose.Position.Y, 0];
-startPoint = [posUtmData.Pose.Position.X,posUtmData.Pose.Position.Y, 0];
-wayPointStore=[0,0];
 
 fig = figure();
 
@@ -55,10 +48,10 @@ while true
 
     receivedPoints = lidarSubscriber.receive();
 
-    % rotationAngles = [0 0 -0.5];
-    % translation = [0 0 0];
-    % tform = rigidtform3d(rotationAngles,translation);
-    % receivedPoints = pctransform(receivedPoints,tform);
+    rotationAngles = [0 0 -2];
+    translation = [0 0 0];
+    tform = rigidtform3d(rotationAngles,translation);
+    receivedPoints = pctransform(receivedPoints,tform);
 
     bboxData1 = receive(detectionSubscriber1);
     bboxData2 = receive(detectionSubscriber2);
@@ -68,27 +61,27 @@ while true
 
     [labels,numClusters] = pcsegdist(nonGroundPoints,0.3);
 
-    mergedPoints = pointCloud([0,0,0]);
-    % mergedPoints = nonGroundPoints;
-    for i = 1:numClusters
-       clusterIndices = find(labels == i);
-       clusterCloud = select(nonGroundPoints, clusterIndices);
-       clusterCenter(:) = mean(clusterCloud.Location);
+    %mergedPoints = pointCloud([0,0,0]);
+    mergedPoints = nonGroundPoints;
+    %for i = 1:numClusters
+    %    clusterIndices = find(labels == i);
+    %    clusterCloud = select(nonGroundPoints, clusterIndices);
+    %    clusterCenter(:) = mean(clusterCloud.Location);
 
-      expectedPointCount = filter(clusterCenter(1), clusterCenter(2));
+    %   expectedPointCount = filter(clusterCenter(1), clusterCenter(2));
 
-     if clusterCloud.Count > expectedPointCount * 1.4
-        continue;
-    end
+    %  if clusterCloud.Count > expectedPointCount * 1.4
+    %     continue;
+    % end
 
-     reconstructedPoints = getPointsInCylinder(clusterCenter, roiPoints);
+    %  reconstructedPoints = getPointsInCylinder(clusterCenter, roiPoints);
 
-    if reconstructedPoints.Count < expectedPointCount * 0.4
-       continue;
-    end
+    % if reconstructedPoints.Count < expectedPointCount * 0.4
+    %    continue;
+    %end
 
-    mergedPoints = pcmerge(mergedPoints, reconstructedPoints, 0.01);
-    end
+    %mergedPoints = pcmerge(mergedPoints, reconstructedPoints, 0.01);
+    %end
 
     bboxesCamera1 = getBboxesCamera(bboxData1);
     bboxesCamera2 = getBboxesCamera(bboxData2);
@@ -100,50 +93,21 @@ while true
         [bboxesLidar1; bboxesLidar2], ...
         vertcat(bboxData1.Detections.Label, bboxData2.Detections.Label), ...
         [bboxesUsed1; bboxesUsed2]);
-
-    view(conPyr, mergedPoints)
-    showShape("cuboid", ...
-        [yBboxes; bBboxes; rBboxes], ...
-        Parent=conPyr.Axes, ...
-        Color="green", ...
-        Opacity=0.5)
-    drawnow
+    % 
+    % view(conPyr, mergedPoints)
+    % showShape("cuboid", ...
+    %     [yBboxes; bBboxes; rBboxes], ...
+    %     Parent=conPyr.Axes, ...
+    %     Color="green", ...
+    %     Opacity=0.5)
+    % drawnow
 
     yPos = yBboxes(:, 1:2)+[+1.8,0];
     rPos = rBboxes(:, 1:2)+[+1.8,0];
     bPos = bBboxes(:, 1:2)+[+1.8,0];
 
-    yPos = sortrows(yPos);
-    rPos = sortrows(rPos);
-    bPos = sortrows(bPos);
-    if(size(yPos,1)>2)
-        yCon = yPos(1,1:2);
-        for i = 2:size(yPos,1)
-            if(norm(yPos(i,:) - yCon(end,:)) > 0.4)
-                yCon(end+1,:) = yPos(i,:);
-            end
-        end
-        yPos = yCon;
-    end
-    if(size(rPos,1)>2)
-        rCon = rPos(1,1:2);
-        for i = 2:size(rPos,1)
-            if(norm(rPos(i,:) - rCon(end,:)) > 0.4)
-                rCon(end+1,:) = rPos(i,:);
-            end
-        end
-        rPos = rCon;
-    end
-    if(size(bPos,1)>2)
-        bCon = bPos(1,1:2);
-        for i = 2:size(bPos,1)
-            if(norm(bPos(i,:) - bCon(end,:)) > 0.4)
-                bCon(end+1,:) = bPos(i,:);
-            end
-        end
-        bPos = bCon;
-    end
-    
+    bPos= sort(bPos);
+    yPos= sort(yPos);
 
 
     %% JUDGEMENT - LOOP
@@ -153,30 +117,21 @@ while true
     while redConeBrake(redCones) == 1
         while 1
 
-            [pub, msg] = publish_twist_command(-300, 0,velo, '/cmd_vel');
+            [pub, msg] = publish_twist_command(0, 0,v, '/cmd_vel');
             send(pub, msg);
         end
     end
 
-    posUtmData = receive(gpsSub);
-    veloUtmData = receive(utmSpeedSub);
-    velo = updateVehicleVelo(veloUtmData);
-    %imuData = receive(imuSub);
+    % posUtmData = receive(gpsSub);
+    % veloUtmData = receive(utmSpeedSub);
+    % velo = updateVehicleVelo(veloUtmData);
+    % imuData = receive(imuSub);
 
 
-    vehiclePose = updateVehiclePose(posUtmData,vehiclePose,startPoint);
-
-        wayPointStore = [wayPointStore;vehiclePose(1:2)];
+    vehiclePose = [0,0,0];
 
     % if isempty(pp.Waypoints) || norm(worldWaypoints(end,:)-[vehiclePose(1), vehiclePose(2)]) < waypointTreshold  % Considering only x and y for the distance
     disp("Make new waypoints");
-
-    scatter(bPos(:,1),bPos(:,2),'blue');
-    xlim(roi(1:2));
-    ylim(roi(3:4));
-    hold on
-    scatter(rPos(:,1),rPos(:,2),'red');
-    scatter(yPos(:,1),yPos(:,2),'green');
 
     try
         innerConePosition = bPos;
@@ -188,45 +143,43 @@ while true
 
         % print("make waypoints..")
 
-        worldWaypoints = transformWaypointsToOdom(waypoints, vehiclePose);
+        % worldWaypoints = transformWaypointsToOdom(waypoints, vehiclePose);
 
 
-        pp.Waypoints = worldWaypoints;
+        pp.Waypoints = waypoints;
     catch
         disp("Fail to make new waypoints");
-        hold off
         continue; % 다음 while문 반복으로 넘어감
     end
     % end
-    
-    
+    scatter(bPos(:,1),bPos(:,2),'blue');
+    xlim(roi(1:2));
+    ylim(roi(3:4));
+    hold on
+    scatter(rPos(:,1),rPos(:,2),'red');
+    scatter(yPos(:,1),yPos(:,2),'green');
     plot(waypoints(:,1), waypoints(:,2));
 
 
     hold off
 
-    [v, w] = pp(vehiclePose); % Pass the current vehicle pose to the path planner
-
+   [v, w] = pp(vehiclePose); % Pass the current vehicle pose to the path planner
+w
     % if abs(prevw)>abs(w)
     %     w = -w;
     % end
     prevw = w;
     carL = 1.33;
     % wDelay = w * carL/v;
-    
-    
-    %wDelay =0.11 * carL/0.5;
 
-
-     if velo <= 0.05 || vehiclePose(3) == 0 || abs(w)<0.01
-         wDelay = 0;
-         % Using Target Speed
-     else
-         wDelay =w * carL/velo
-     end
-    
-
-    [pub, msg] = publish_twist_command(v, wDelay, velo, '/cmd_vel');
+    if abs(w)<0.1
+        wDelay = 0;
+        % Using Target Speed
+    else
+        wDelay =w * carL/v;
+    end
+wDelay
+    [pub, msg] = publish_twist_command(v, wDelay, v, '/cmd_vel');
     send(pub, msg);
 
     % 종방향 속도, 횡방향 각속도
@@ -248,23 +201,31 @@ currentVelo = utmVelo;
 end
 
 % utmX, utmY, yaw
-function vehiclePose = updateVehiclePose(currentPosUtm, prevPose,startPoint)
+function vehiclePose = updateVehiclePose(currentPosUtm, imu)
+% Originally Imu gave values in degree but PP needs values in radian.
 
-currentPose = [currentPosUtm.Pose.Position.X,currentPosUtm.Pose.Position.Y];
-nowVec = currentPose - prevPose(1:2);
-xVec = [1,0];
+raw_yaw = imu.Orientation.X;
+% if raw_yaw>=90
+%     yawD = raw_yaw-90;
+% elseif raw_yaw>=0
+%     yawD= raw_yaw - 90;
+% elseif raw_yaw>=-90
+%     yawD=  -90+raw_yaw;
+% else
+%     yawD= 270+raw_yaw;
+% end
+% yawRad = yawD * pi / 180;
 
-if norm(currentPose - startPoint(1:2))<0.3
-    yawRad = 0;
-elseif norm(currentPose - prevPose(1:2))>0.05
-    if nowVec(2)<0
-        yawRad =- acos(dot(nowVec,xVec)/norm(nowVec)/norm(xVec));
-    else
-        yawRad = acos(dot(nowVec,xVec)/norm(nowVec)/norm(xVec));
-    end
+if raw_yaw >= 90
+    yawD = (180 - raw_yaw) + 90;
+elseif raw_yaw >= 0
+    yawD = -90 - (raw_yaw);
+elseif raw_yaw >= -90
+    yawD = -raw_yaw - 90;
 else
-    yawRad = prevPose(3);
+    yawD = -(raw_yaw + 90);
 end
+yawRad = yawD * pi / 180;
 
 vehiclePose=[currentPosUtm.Pose.Position.X,currentPosUtm.Pose.Position.Y,yawRad];
 end
@@ -286,7 +247,7 @@ if size(redCones,1) ~= 0
         %     redConeCnt = redConeCnt+1;
         % end
     end
-    if redConeCnt>2
+    if redConeCnt>1
         isStop = 1;
     end
 end
@@ -373,7 +334,7 @@ else
         kockle_coords(1:2:2*innerM,:) = innerConePosition;
         kockle_coords(2:2:2*innerM,:) = outerConePosition;
     end
-        %scatter(kockle_coords(:,1),kockle_coords(:,2),'black');
+        scatter(kockle_coords(:,1),kockle_coords(:,2),'black');
 
 
 
@@ -430,7 +391,6 @@ else
 
 end
 end
-
 function [pub, msg] = publish_twist_command(v, w, curVelo, topicName)
 pub = rospublisher(topicName, 'geometry_msgs/Twist','DataFormat','struct');
 msg = rosmessage(pub);

@@ -5,10 +5,10 @@ rosinit();
 lidarSubscriber = LidarSubscriber('/ouster/points', "DataFormat", "struct");
 params = lidarParameters('OS1Gen1-32', 1024);
 
-cameraSubscriber1 = rossubscriber("/camera2/usb_cam2/image_raw");
-cameraSubscriber2 = rossubscriber("/camera1/usb_cam1/image_raw");
+cameraSubscriber1 = rossubscriber("/camera1/usb_cam1/image_raw");
+cameraSubscriber2 = rossubscriber("/camera2/usb_cam2/image_raw");
 
-load("./src/param/cameraParams.mat"); load("./src/param/tform.mat");
+load("./src/param/cam1.mat"); load("./src/param/cam2.mat");
 
 lidarPlayer1 = pcplayer([0,20], [-10,10], [-1,2]);
 lidarPlayer2 = pcplayer([0,20], [-10,10], [-1,2]);
@@ -16,6 +16,13 @@ mergePlayer = pcplayer([0,20], [-10,10], [-1,2]);
 
 while true
     receivedPoints = lidarSubscriber.receive();
+
+
+    rotationAngles = [0 0 -0.5];
+    translation = [0 0 0];
+    tform = rigidtform3d(rotationAngles,translation);
+    receivedPoints = pctransform(receivedPoints,tform);
+
 
     cameraData1 = receive(cameraSubscriber1);
     cameraData2 = receive(cameraSubscriber2);
